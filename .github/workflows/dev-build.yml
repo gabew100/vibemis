@@ -348,12 +348,14 @@ jobs:
       # tests/updater (the atomic AppImage swap the self-updater relies on) and
       # tests/bitrate (the bitrate-collapse rescue policy) existed for months
       # without any job building them (BL-2702). Both are QtCore-only.
-      - name: Build and run the updater and bitrate test suites
+      # Native Deck also links the real preferences to cover save/reload; its
+      # QtQml and SDL dependencies are already installed above.
+      - name: Build and run the updater, bitrate, and native Deck test suites
         run: |
           set -Eeuo pipefail
           export QT_QPA_PLATFORM=offscreen
           rc=0
-          for suite in updater:tst_updaterswap bitrate:tst_bitraterescuepolicy; do
+          for suite in updater:tst_updaterswap bitrate:tst_bitraterescuepolicy native-deck:tst_nativedeckcontroller; do
             dir=${suite%%:*}; t=${suite##*:}
             mkdir -p "build-$dir-tests"
             ( cd "build-$dir-tests" && qmake6 "$GITHUB_WORKSPACE/tests/$dir/$dir.pro" && make -j"$(nproc)" )
@@ -1289,9 +1291,6 @@ jobs:
         # (mirroring Nonary v6.1.0-vrr9.1.1) so it is the only one on the pkg-config /
         # linker path and gets bundled into the AppImage.
 
-    - name: Test native Deck controller selection
-      run: bash tests/native-deck/test-controller-selection.sh
-
     - name: Build pinned SDL with native Steam Deck motion support
       run: |
         set -euo pipefail
@@ -1494,9 +1493,6 @@ jobs:
         test -f "$ICON" || { echo "ERROR: branded app icon missing at $ICON"; exit 1; }
         file "$ICON"
 
-    - name: Install opt-in native Deck controller hook
-      run: bash scripts/install-native-deck-gyro-hook.sh "$PWD/deploy"
-
     - name: Bundle AppImage with linuxdeploy
       run: |
         export PATH="$QT_ROOT_DIR/bin:$PATH"
@@ -1517,10 +1513,9 @@ jobs:
           --plugin qt \
           --output appimage
 
-    - name: Verify bundled SDL and native Deck hook
+    - name: Verify bundled SDL
       run: |
         set -euo pipefail
-        test -x deploy/apprun-hooks/00-native-steam-deck-gyro.sh
         test -f deploy/usr/lib/libSDL2-2.0.so.0
         LD_LIBRARY_PATH="$PWD/deploy/usr/lib" python3 - <<'PY'
         import ctypes

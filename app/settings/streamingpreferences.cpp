@@ -1,4 +1,5 @@
 #include "streamingpreferences.h"
+#include "nativedeckcontroller.h"
 #include "streaming/vrrratepolicy.h"
 #include "utils.h"
 
@@ -214,6 +215,7 @@ void StreamingPreferences::reload()
     compactPerformanceOverlay = settings.value(SER_COMPACTPERFOVERLAY, false).toBool();
     preferTailscale = settings.value(SER_PREFERTAILSCALE, false).toBool();
     forwardMotionControls = settings.value(SER_FORWARDMOTION, false).toBool();
+    nativeDeckControls = settings.value(NativeDeckController::SettingKey, false).toBool();
     perfOverlayShowClock = settings.value(SER_PERFOVERLAYCLOCK, false).toBool();
     suppressControllerRumble = settings.value(SER_SUPPRESSRUMBLE, false).toBool();
     perfOverlayTextSize = static_cast<PerfOverlayTextSize>(settings.value(SER_PERFOVERLAYTEXTSIZE,
@@ -467,6 +469,7 @@ void StreamingPreferences::save()
     settings.setValue(SER_COMPACTPERFOVERLAY, compactPerformanceOverlay);
     settings.setValue(SER_PREFERTAILSCALE, preferTailscale);
     settings.setValue(SER_FORWARDMOTION, forwardMotionControls);
+    settings.setValue(NativeDeckController::SettingKey, nativeDeckControls);
     settings.setValue(SER_PERFOVERLAYCLOCK, perfOverlayShowClock);
     settings.setValue(SER_SUPPRESSRUMBLE, suppressControllerRumble);
     settings.setValue(SER_PERFOVERLAYTEXTSIZE, static_cast<int>(perfOverlayTextSize));

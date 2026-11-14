@@ -1,4 +1,5 @@
 #include "systemproperties.h"
+#include "settings/nativedeckcontroller.h"
 #include "utils.h"
 
 #include <QGuiApplication>
@@ -22,6 +23,11 @@ SystemProperties::SystemProperties()
     // These MEMBER-backed Q_PROPERTYs were declared but never assigned, leaving them
     // uninitialized — QML read garbage. Initialize both.
     isSteamDeck = isSteamDeckOrGamescope();
+#if defined(Q_OS_LINUX) && defined(APP_IMAGE)
+    hasNativeDeckController = NativeDeckController::isAvailable();
+#else
+    hasNativeDeckController = false;
+#endif
     hasVulkanHdr = false;
     hasDesktopEnvironment = WMUtils::isRunningDesktopEnvironment();
     isRunningWayland = WMUtils::isRunningWayland();

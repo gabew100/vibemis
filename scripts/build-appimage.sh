@@ -208,8 +208,6 @@ unset _vibemis_appimage_path _vibemis_desktop_dir _vibemis_icon_dir \
 DESKHOOK
 chmod +x $DEPLOY_FOLDER/apprun-hooks/02-desktop-integration.sh
 
-bash "$SOURCE_ROOT/scripts/install-native-deck-gyro-hook.sh" "$DEPLOY_FOLDER" || fail "Native Deck hook installation failed!"
-
 export QML_SOURCES_PATHS=$SOURCE_ROOT/app/gui
 export QMAKE=qmake6
 

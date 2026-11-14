@@ -61,6 +61,7 @@
 #include "streaming/vrrratepolicy.h"
 #include "streaming/bitraterescuepolicy.h"
 #include "settings/streamingpreferences.h"
+#include "settings/nativedeckcontroller.h"
 #include "gui/sdlgamepadkeynavigation.h"
 #include "gui/uisoundmanager.h"
 #include "backend/clipboardmanager.h"
@@ -869,6 +870,13 @@ int main(int argc, char *argv[])
     }
 
     QGuiApplication app(argc, argv);
+
+#if defined(Q_OS_LINUX) && defined(APP_IMAGE)
+    // Apply before QML navigation or a stream initializes SDL game controllers.
+    if (NativeDeckController::configure(QSettings())) {
+        qInfo() << "[motion] Native Steam Deck controller selected; Steam virtual copy excluded";
+    }
+#endif
 
     // Vibemis: the Qt Quick Controls Material style renders button text in ALL CAPS by default
     // (e.g. the bitrate "USE DEFAULT (30 MBPS)" button), which looks off. Force mixed case for the

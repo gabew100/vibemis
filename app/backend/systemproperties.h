@@ -29,6 +29,7 @@ public:
     Q_PROPERTY(bool supportsHdr MEMBER supportsHdr CONSTANT)
     Q_PROPERTY(bool usesMaterial3Theme MEMBER usesMaterial3Theme CONSTANT)
     Q_PROPERTY(bool isSteamDeck MEMBER isSteamDeck CONSTANT)
+    Q_PROPERTY(bool hasNativeDeckController MEMBER hasNativeDeckController CONSTANT)
     Q_PROPERTY(bool hasVulkanHdr MEMBER hasVulkanHdr CONSTANT)
 
     Q_INVOKABLE void refreshDisplays();
@@ -77,6 +78,7 @@ private:
     bool supportsHdr;
     bool usesMaterial3Theme;
     bool isSteamDeck;
+    bool hasNativeDeckController;
     bool hasVulkanHdr;
 };
 

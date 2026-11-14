@@ -3783,7 +3783,29 @@ Item {
                     ToolTip.delay: 1000
                     ToolTip.timeout: 5000
                     ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Experimental: detect this device's gyro/accelerometer for forwarding to the host (motion/gyro aim). Sensor forwarding is still in development; enabling this currently logs the detected sensors.")
+                    ToolTip.text: qsTr("Forward controller gyro and accelerometer data when requested by a compatible host. Enable native motion input in the game or emulator.")
+                }
+
+                VbToggleRow {
+                    id: nativeDeckControlsCheck
+                    text: qsTr("Use native Steam Deck controls (restart required)")
+                    visible: SystemProperties.hasNativeDeckController || StreamingPreferences.nativeDeckControls
+                    checked: StreamingPreferences.nativeDeckControls
+                    onToggled: {
+                        StreamingPreferences.nativeDeckControls = checked
+                        StreamingPreferences.save()
+                    }
+                }
+
+                Text {
+                    id: nativeDeckControlsHelp
+                    width: parent.width
+                    visible: nativeDeckControlsCheck.visible
+                    text: qsTr("Restart Vibemis after changing this option. Native controls bypass Steam Input custom layouts for Vibemis. Also enable Forward motion controls (gyro) to send motion data.")
+                    font.family: VbTokens.fontBody
+                    font.pixelSize: VbTokens.typeLabel
+                    color: VbTokens.text
+                    wrapMode: Text.Wrap
                 }
 
                 VbToggleRow {
