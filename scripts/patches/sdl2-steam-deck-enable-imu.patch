@@ -1,0 +1,23 @@
+diff --git a/src/joystick/hidapi/SDL_hidapi_steamdeck.c b/src/joystick/hidapi/SDL_hidapi_steamdeck.c
+index 20554ed..a3ee07c 100644
+--- a/src/joystick/hidapi/SDL_hidapi_steamdeck.c
++++ b/src/joystick/hidapi/SDL_hidapi_steamdeck.c
+@@ -395,3 +395,17 @@ static int HIDAPI_DriverSteamDeck_SetSensorsEnabled(SDL_HIDAPI_Device *device, S
+ {
+-    // On steam deck, sensors are enabled by default. Nothing to do here.
++    /* Steam may leave the Deck IMU disabled. Request raw reports when the
++       application enables sensors. Leave reports enabled on close so other
++       applications can continue using them. */
++    if (enabled) {
++        Uint8 buffer[HID_FEATURE_REPORT_BYTES + 1] = { 0 };
++        FeatureReportMsg *msg = (FeatureReportMsg *)(buffer + 1);
++        msg->header.type = ID_SET_SETTINGS_VALUES;
++        msg->header.length = sizeof(ControllerSetting);
++        msg->payload.setSettingsValues.settings[0].settingNum = SETTING_IMU_MODE;
++        msg->payload.setSettingsValues.settings[0].settingValue =
++            SETTING_GYRO_MODE_SEND_RAW_ACCEL | SETTING_GYRO_MODE_SEND_RAW_GYRO;
++        if (SDL_hid_send_feature_report(device->dev, buffer, sizeof(buffer)) != sizeof(buffer)) {
++            return SDL_SetError("Could not enable Steam Deck raw IMU reports");
++        }
++    }
+     return 0;

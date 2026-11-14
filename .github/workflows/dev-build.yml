@@ -1282,12 +1282,22 @@ jobs:
           libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
           libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 \
           librsvg2-bin fuse libfuse2 \
-          python3-pip ninja-build
+          python3-pip ninja-build cmake
         # NOTE: libplacebo-dev is deliberately NOT installed from apt. Jammy ships
         # libplacebo 4.192 (2022, pre-maintenance1), which is the BL-2516 VRR-stutter
         # root cause on the Legion Go S. A modern libplacebo is source-built below
         # (mirroring Nonary v6.1.0-vrr9.1.1) so it is the only one on the pkg-config /
         # linker path and gets bundled into the AppImage.
+
+    - name: Test native Deck controller selection
+      run: bash tests/native-deck/test-controller-selection.sh
+
+    - name: Build pinned SDL with native Steam Deck motion support
+      run: |
+        set -euo pipefail
+        bash scripts/build-sdl2.sh "$PWD/deps/sdl2/install"
+        echo "PKG_CONFIG_PATH=$PWD/deps/sdl2/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$PWD/deps/sdl2/install/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
 
     - name: Download linuxdeploy + Qt plugin
       run: |
@@ -1484,6 +1494,9 @@ jobs:
         test -f "$ICON" || { echo "ERROR: branded app icon missing at $ICON"; exit 1; }
         file "$ICON"
 
+    - name: Install opt-in native Deck controller hook
+      run: bash scripts/install-native-deck-gyro-hook.sh "$PWD/deploy"
+
     - name: Bundle AppImage with linuxdeploy
       run: |
         export PATH="$QT_ROOT_DIR/bin:$PATH"
@@ -1503,6 +1516,24 @@ jobs:
           --icon-file "$DEPLOY/usr/share/icons/hicolor/256x256/apps/vibemis.png" \
           --plugin qt \
           --output appimage
+
+    - name: Verify bundled SDL and native Deck hook
+      run: |
+        set -euo pipefail
+        test -x deploy/apprun-hooks/00-native-steam-deck-gyro.sh
+        test -f deploy/usr/lib/libSDL2-2.0.so.0
+        LD_LIBRARY_PATH="$PWD/deploy/usr/lib" python3 - <<'PY'
+        import ctypes
+        from pathlib import Path
+        class Version(ctypes.Structure):
+            _fields_ = [(name, ctypes.c_uint8) for name in ('major', 'minor', 'patch')]
+        sdl = ctypes.CDLL(str(Path('deploy/usr/lib/libSDL2-2.0.so.0').resolve()))
+        version = Version()
+        sdl.SDL_GetVersion(ctypes.byref(version))
+        actual = (version.major, version.minor, version.patch)
+        assert actual == (2, 32, 10), actual
+        print('Bundled SDL version verified:', actual)
+        PY
 
     - name: Verify AppImage
       run: |
