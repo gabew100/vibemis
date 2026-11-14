@@ -545,6 +545,13 @@ int main(int argc, char *argv[])
         Path::initialize(false);
     }
 
+#if defined(Q_OS_LINUX) && defined(APP_IMAGE)
+    // Read settings after path setup, before SDL or Qt initializes controllers.
+    if (NativeDeckController::configure(QSettings())) {
+        qInfo() << "[motion] Native Steam Deck controller selected; Steam virtual copy excluded";
+    }
+#endif
+
     // Override the default QML cache directory with the one we chose
     if (qEnvironmentVariableIsEmpty("QML_DISK_CACHE_PATH")) {
         qputenv("QML_DISK_CACHE_PATH", Path::getQmlCacheDir().toUtf8());
@@ -870,13 +877,6 @@ int main(int argc, char *argv[])
     }
 
     QGuiApplication app(argc, argv);
-
-#if defined(Q_OS_LINUX) && defined(APP_IMAGE)
-    // Apply before QML navigation or a stream initializes SDL game controllers.
-    if (NativeDeckController::configure(QSettings())) {
-        qInfo() << "[motion] Native Steam Deck controller selected; Steam virtual copy excluded";
-    }
-#endif
 
     // Vibemis: the Qt Quick Controls Material style renders button text in ALL CAPS by default
     // (e.g. the bitrate "USE DEFAULT (30 MBPS)" button), which looks off. Force mixed case for the

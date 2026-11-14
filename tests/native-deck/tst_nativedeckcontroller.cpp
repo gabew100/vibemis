@@ -43,6 +43,14 @@ private:
     }
 
 private slots:
+    void initTestCase()
+    {
+        SDL_version version;
+        SDL_GetVersion(&version);
+        qInfo("SDL runtime: %u.%u.%u", static_cast<unsigned>(version.major),
+              static_cast<unsigned>(version.minor), static_cast<unsigned>(version.patch));
+    }
+
     void init()
     {
         for (const QByteArray& name : variables) {
@@ -62,6 +70,7 @@ private slots:
             } else {
                 qunsetenv(name.constData());
             }
+            SDL_ResetHint(name.constData());
         }
         original.clear();
         originallySet.clear();
@@ -137,6 +146,18 @@ private slots:
         QCOMPARE(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES"), expected);
     }
 
+    void followsSysfsDeviceSymlinks()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        addDevice(root);
+        QVERIFY(QDir().rename(root.filePath("sys/hidraw0"), root.filePath("endpoint")));
+        QVERIFY(QFile::link(root.filePath("endpoint"), root.filePath("sys/hidraw0")));
+        QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
+        settings.setValue(NativeDeckController::SettingKey, true);
+        QVERIFY(configure(root, settings));
+    }
+
     void readOnlyHardwarePreservesEnvironment()
     {
         QTemporaryDir root;
@@ -192,6 +213,27 @@ private slots:
         }
         QScopedPointer<StreamingPreferences> disabled(StreamingPreferences::createDetached());
         QVERIFY(!disabled->nativeDeckControls);
+    }
+
+    void updatesRegisteredSdlHintCallbacks()
+    {
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        addDevice(root);
+        QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
+        settings.setValue(NativeDeckController::SettingKey, true);
+        qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES", "0x28de/0x1205");
+        SDL_ResetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES);
+        QByteArray observed;
+        const auto callback = [](void* userdata, const char*, const char*, const char* value) {
+            *static_cast<QByteArray*>(userdata) = value;
+        };
+        SDL_AddHintCallback(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, callback, &observed);
+        const bool configured = configure(root, settings);
+        SDL_DelHintCallback(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, callback, &observed);
+        QVERIFY(configured);
+        QCOMPARE(observed, QByteArray("0x28de/0x11ff"));
+        QCOMPARE(QByteArray(SDL_GetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES)), QByteArray("0x28de/0x11ff"));
     }
 
     void launchOverride_data()

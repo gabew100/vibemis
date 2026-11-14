@@ -1157,6 +1157,10 @@ void SdlInputHandler::rumbleTriggers(uint16_t controllerNumber, uint16_t leftTri
 
 void SdlInputHandler::setMotionEventState(uint16_t controllerNumber, uint8_t motionType, uint16_t reportRateHz)
 {
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                "[motion] Host motion request: controller=%u sensor=%u rate=%u Hz",
+                static_cast<unsigned>(controllerNumber), static_cast<unsigned>(motionType),
+                static_cast<unsigned>(reportRateHz));
     // Make sure the controller number is within our supported count
     if (controllerNumber >= MAX_GAMEPADS) {
         return;
@@ -1176,12 +1180,16 @@ void SdlInputHandler::setMotionEventState(uint16_t controllerNumber, uint8_t mot
         switch (motionType) {
         case LI_MOTION_TYPE_ACCEL:
             m_GamepadState[controllerNumber].accelReportPeriodMs = reportPeriodMs;
-            SDL_GameControllerSetSensorEnabled(m_GamepadState[controllerNumber].controller, SDL_SENSOR_ACCEL, reportRateHz ? SDL_TRUE : SDL_FALSE);
+            if (SDL_GameControllerSetSensorEnabled(m_GamepadState[controllerNumber].controller, SDL_SENSOR_ACCEL, reportRateHz ? SDL_TRUE : SDL_FALSE) != 0) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[motion] Accelerometer activation failed: %s", SDL_GetError());
+            }
             break;
 
         case LI_MOTION_TYPE_GYRO:
             m_GamepadState[controllerNumber].gyroReportPeriodMs = reportPeriodMs;
-            SDL_GameControllerSetSensorEnabled(m_GamepadState[controllerNumber].controller, SDL_SENSOR_GYRO, reportRateHz ? SDL_TRUE : SDL_FALSE);
+            if (SDL_GameControllerSetSensorEnabled(m_GamepadState[controllerNumber].controller, SDL_SENSOR_GYRO, reportRateHz ? SDL_TRUE : SDL_FALSE) != 0) {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "[motion] Gyroscope activation failed: %s", SDL_GetError());
+            }
             break;
         }
     }

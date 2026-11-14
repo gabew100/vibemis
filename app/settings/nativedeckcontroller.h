@@ -4,10 +4,18 @@
 #include <QFile>
 #include <QSettings>
 #include <QStringList>
+#include "SDL_compat.h"
 
 namespace NativeDeckController {
 
 inline constexpr char SettingKey[] = "nativedeckcontrols";
+
+inline void setHint(const char* name, const QByteArray& value)
+{
+    qputenv(name, value);
+    // Updating the environment alone does not notify SDL's existing callbacks.
+    SDL_SetHintWithPriority(name, value.constData(), SDL_HINT_OVERRIDE);
+}
 
 inline bool isAvailable(const QDir& hidrawRoot = QDir(QStringLiteral("/sys/class/hidraw")),
                         const QDir& deviceRoot = QDir(QStringLiteral("/dev")))
@@ -56,13 +64,13 @@ inline bool configure(const QSettings& settings,
         }
     }
     filtered.append(QStringLiteral("0x28de/0x11ff"));
-    qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES", filtered.join(',').toUtf8());
+    setHint("SDL_GAMECONTROLLER_IGNORE_DEVICES", filtered.join(',').toUtf8());
     if (!qEnvironmentVariableIsEmpty("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT")) {
-        qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT", "0x28de/0x1205");
+        setHint("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT", "0x28de/0x1205");
     }
-    qputenv("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0");
-    qputenv("SDL_JOYSTICK_HIDAPI", "1");
-    qputenv("SDL_JOYSTICK_HIDAPI_STEAMDECK", "1");
+    setHint("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0");
+    setHint("SDL_JOYSTICK_HIDAPI", "1");
+    setHint("SDL_JOYSTICK_HIDAPI_STEAMDECK", "1");
     return true;
 }
 
