@@ -4,17 +4,29 @@
 #include <QFile>
 #include <QSettings>
 #include <QStringList>
-#include "SDL_compat.h"
+#include <cstdio>
 
 namespace NativeDeckController {
 
 inline constexpr char SettingKey[] = "nativedeckcontrols";
 
-inline void setHint(const char* name, const QByteArray& value)
+inline bool isEnabled(const QSettings& settings)
 {
-    qputenv(name, value);
-    // Updating the environment alone does not notify SDL's existing callbacks.
-    SDL_SetHintWithPriority(name, value.constData(), SDL_HINT_OVERRIDE);
+    return qEnvironmentVariableIsSet("VIBEMIS_NATIVE_DECK_GYRO")
+            ? qgetenv("VIBEMIS_NATIVE_DECK_GYRO") == "1"
+            : settings.value(SettingKey, false).toBool();
+}
+
+inline int queryPreference(int argc, char* const argv[], const QSettings& settings)
+{
+    if (argc != 2 || qstrcmp(argv[1], "--native-deck-controls-enabled") != 0) {
+        return -1;
+    }
+    // AppRun reads only this bit; do not initialize SDL or a Qt platform plugin.
+    if (std::fputs(isEnabled(settings) ? "1\n" : "0\n", stdout) == EOF) {
+        return 1;
+    }
+    return std::fflush(stdout) == 0 ? 0 : 1;
 }
 
 inline bool isAvailable(const QDir& hidrawRoot = QDir(QStringLiteral("/sys/class/hidraw")),
@@ -41,37 +53,6 @@ inline bool isAvailable(const QDir& hidrawRoot = QDir(QStringLiteral("/sys/class
         }
     }
     return false;
-}
-
-inline bool configure(const QSettings& settings,
-                      const QDir& hidrawRoot = QDir(QStringLiteral("/sys/class/hidraw")),
-                      const QDir& deviceRoot = QDir(QStringLiteral("/dev")))
-{
-    // An explicit launch override wins over the saved setting, including =0.
-    const bool enabled = qEnvironmentVariableIsSet("VIBEMIS_NATIVE_DECK_GYRO")
-            ? qgetenv("VIBEMIS_NATIVE_DECK_GYRO") == "1"
-            : settings.value(SettingKey, false).toBool();
-    if (!enabled || !isAvailable(hidrawRoot, deviceRoot)) {
-        return false;
-    }
-
-    QStringList filtered;
-    for (const QString& id : QString::fromUtf8(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES")).split(',')) {
-        const QString normalized = id.trimmed().toLower();
-        if (!normalized.isEmpty() && normalized != QStringLiteral("0x28de/0x1205") &&
-                normalized != QStringLiteral("0x28de/0x11ff")) {
-            filtered.append(id);
-        }
-    }
-    filtered.append(QStringLiteral("0x28de/0x11ff"));
-    setHint("SDL_GAMECONTROLLER_IGNORE_DEVICES", filtered.join(',').toUtf8());
-    if (!qEnvironmentVariableIsEmpty("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT")) {
-        setHint("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT", "0x28de/0x1205");
-    }
-    setHint("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "0");
-    setHint("SDL_JOYSTICK_HIDAPI", "1");
-    setHint("SDL_JOYSTICK_HIDAPI_STEAMDECK", "1");
-    return true;
 }
 
 } // namespace NativeDeckController

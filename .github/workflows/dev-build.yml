@@ -375,10 +375,18 @@ jobs:
             echo "::endgroup::"
           done
           if [ "$rc" -ne 0 ]; then
-            echo "- Updater/bitrate test suites FAILED" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Updater/bitrate/native Deck test suites FAILED" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "- Updater and bitrate test suites: passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Updater, bitrate, and native Deck test suites: passed" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Test native Deck pre-launch selection
+        run: |
+          set -euo pipefail
+          bash tests/native-deck/test-controller-selection.sh
+          bin=$(find "$GITHUB_WORKSPACE/build-native-deck-tests" -type f -name tst_nativedeckcontroller -perm -u+x -print -quit)
+          test -n "$bin"
+          bash tests/native-deck/test-prelaunch-settings.sh "$bin"
 
   # A change a user can notice must ship with a sentence a user can read.
   #
@@ -1493,6 +1501,9 @@ jobs:
         test -f "$ICON" || { echo "ERROR: branded app icon missing at $ICON"; exit 1; }
         file "$ICON"
 
+    - name: Install opt-in native Deck controller hook
+      run: bash scripts/install-native-deck-gyro-hook.sh "$PWD/deploy"
+
     - name: Bundle AppImage with linuxdeploy
       run: |
         export PATH="$QT_ROOT_DIR/bin:$PATH"
@@ -1513,9 +1524,10 @@ jobs:
           --plugin qt \
           --output appimage
 
-    - name: Verify bundled SDL
+    - name: Verify bundled SDL and native Deck hook
       run: |
         set -euo pipefail
+        test -x deploy/apprun-hooks/00-native-steam-deck-gyro.sh
         test -f deploy/usr/lib/libSDL2-2.0.so.0
         LD_LIBRARY_PATH="$PWD/deploy/usr/lib" python3 - <<'PY'
         import ctypes
@@ -1529,6 +1541,24 @@ jobs:
         assert actual == (2, 32, 10), actual
         print('Bundled SDL version verified:', actual)
         PY
+
+    - name: Verify native Deck preference query in packaged AppImage
+      run: |
+        set -euo pipefail
+        app=$(find "$PWD/build/installer-release" -maxdepth 1 -name '*.AppImage' -print -quit)
+        test -n "$app"
+        config=$(mktemp -d)
+        query() {
+          env -u VIBEMIS_NATIVE_DECK_GYRO -u DISPLAY -u WAYLAND_DISPLAY \
+            APPIMAGE_EXTRACT_AND_RUN=1 XDG_CONFIG_HOME="$config" \
+            QT_QPA_PLATFORM=vibemis-no-platform-plugin \
+            "$app" --native-deck-controls-enabled | tail -n 1
+        }
+        test "$(query)" = 0
+        mkdir -p "$config/Vibemis Project"
+        printf '[General]\nnativedeckcontrols=true\n' > "$config/Vibemis Project/Vibemis.conf"
+        test "$(query)" = 1
+        echo 'Packaged native Deck preference query passed without a display or Qt platform plugin'
 
     - name: Verify AppImage
       run: |

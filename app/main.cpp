@@ -546,9 +546,9 @@ int main(int argc, char *argv[])
     }
 
 #if defined(Q_OS_LINUX) && defined(APP_IMAGE)
-    // Read settings after path setup, before SDL or Qt initializes controllers.
-    if (NativeDeckController::configure(QSettings())) {
-        qInfo() << "[motion] Native Steam Deck controller selected; Steam virtual copy excluded";
+    const int nativeDeckQuery = NativeDeckController::queryPreference(argc, argv, QSettings());
+    if (nativeDeckQuery >= 0) {
+        return nativeDeckQuery;
     }
 #endif
 

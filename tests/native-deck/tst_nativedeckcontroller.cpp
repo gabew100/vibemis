@@ -1,10 +1,12 @@
 #include <QtTest>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QTemporaryDir>
 
 #include "../../app/settings/nativedeckcontroller.h"
 #include "../../app/settings/streamingpreferences.h"
 
-// Keep platform display probes deterministic while exercising the real preferences.
+// Display probes are unrelated to saving controller preferences.
 namespace WMUtils {
 bool isRunningWayland() { return false; }
 bool isGpuSlow() { return false; }
@@ -15,11 +17,7 @@ class NativeDeckControllerTest : public QObject
     Q_OBJECT
 
 private:
-    const QList<QByteArray> variables = {
-        "VIBEMIS_NATIVE_DECK_GYRO", "SDL_GAMECONTROLLER_IGNORE_DEVICES",
-        "SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT", "SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD",
-        "SDL_JOYSTICK_HIDAPI", "SDL_JOYSTICK_HIDAPI_STEAMDECK", "SDL_AUDIODRIVER"
-    };
+    const QList<QByteArray> variables = {"VIBEMIS_NATIVE_DECK_GYRO", "SDL_AUDIODRIVER"};
     QMap<QByteArray, QByteArray> original;
     QSet<QByteArray> originallySet;
 
@@ -37,9 +35,9 @@ private:
         writeFile(root.filePath("dev/hidraw0"), "untouched");
     }
 
-    static bool configure(const QTemporaryDir& root, const QSettings& settings)
+    static bool isAvailable(const QTemporaryDir& root)
     {
-        return NativeDeckController::configure(settings, QDir(root.filePath("sys")), QDir(root.filePath("dev")));
+        return NativeDeckController::isAvailable(QDir(root.filePath("sys")), QDir(root.filePath("dev")));
     }
 
 private slots:
@@ -70,80 +68,55 @@ private slots:
             } else {
                 qunsetenv(name.constData());
             }
-            SDL_ResetHint(name.constData());
         }
         original.clear();
         originallySet.clear();
     }
 
-    void defaultPreservesSteamInput()
+    void defaultIsOff()
     {
         QTemporaryDir root;
         QVERIFY(root.isValid());
-        addDevice(root);
         QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
-        qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES", "0x28de/0x1205,0x054c/0x09cc");
-        qputenv("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "1");
-        QVERIFY(!configure(root, settings));
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES"), QByteArray("0x28de/0x1205,0x054c/0x09cc"));
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD"), QByteArray("1"));
-        QVERIFY(!qEnvironmentVariableIsSet("SDL_JOYSTICK_HIDAPI_STEAMDECK"));
+        QVERIFY(!NativeDeckController::isEnabled(settings));
     }
 
-    void savedPreferenceSurvivesRestart()
+    void savedPreference_data()
+    {
+        QTest::addColumn<bool>("saved");
+        QTest::newRow("enabled") << true;
+        QTest::newRow("disabled") << false;
+    }
+
+    void savedPreference()
+    {
+        QFETCH(bool, saved);
+        QTemporaryDir root;
+        QVERIFY(root.isValid());
+        {
+            QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
+            settings.setValue(NativeDeckController::SettingKey, saved);
+        }
+        QSettings reloaded(root.filePath("settings.ini"), QSettings::IniFormat);
+        QCOMPARE(NativeDeckController::isEnabled(reloaded), saved);
+    }
+
+    void hardwareAvailability()
     {
         QTemporaryDir root;
         QVERIFY(root.isValid());
+        QVERIFY(!isAvailable(root));
+        addDevice(root, "0003:000028DE:000011FF");
+        QVERIFY(!isAvailable(root));
         addDevice(root);
-        {
-            QSettings saved(root.filePath("settings.ini"), QSettings::IniFormat);
-            saved.setValue(NativeDeckController::SettingKey, true);
-        }
-        QSettings reloaded(root.filePath("settings.ini"), QSettings::IniFormat);
-        QVERIFY(configure(root, reloaded));
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES"), QByteArray("0x28de/0x11ff"));
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD"), QByteArray("0"));
-        QCOMPARE(qgetenv("SDL_JOYSTICK_HIDAPI"), QByteArray("1"));
-        QCOMPARE(qgetenv("SDL_JOYSTICK_HIDAPI_STEAMDECK"), QByteArray("1"));
-        QVERIFY(!qEnvironmentVariableIsSet("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT"));
+        QVERIFY(isAvailable(root));
         QFile device(root.filePath("dev/hidraw0"));
         QVERIFY(device.open(QIODevice::ReadOnly));
         QCOMPARE(device.readAll(), QByteArray("untouched"));
-    }
-
-    void missingOrUnrelatedHardwarePreservesEnvironment()
-    {
-        QTemporaryDir root;
-        QVERIFY(root.isValid());
-        QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
-        settings.setValue(NativeDeckController::SettingKey, true);
-        qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES", "0x28de/0x1205");
-        QVERIFY(!configure(root, settings));
-        addDevice(root, "0003:000028DE:000011FF");
-        QVERIFY(!configure(root, settings));
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES"), QByteArray("0x28de/0x1205"));
-        QVERIFY(!qEnvironmentVariableIsSet("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD"));
-        addDevice(root);
-        QVERIFY(QFile::remove(root.filePath("dev/hidraw0")));
-        QVERIFY(!configure(root, settings));
-        QVERIFY(!QFile::exists(root.filePath("dev/hidraw0")));
-    }
-
-    void filtersAreScopedAndIdempotent()
-    {
-        QTemporaryDir root;
-        QVERIFY(root.isValid());
-        addDevice(root, "0003:000028de:00001205");
-        QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
-        settings.setValue(NativeDeckController::SettingKey, true);
-        qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES", "0x28de/0x1205,0x054c/0x09cc, 0x28DE/0x1205,0x28de/0x11ff,");
-        qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT", "0x28de/0x11ff");
-        QVERIFY(configure(root, settings));
-        const QByteArray expected("0x054c/0x09cc,0x28de/0x11ff");
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES"), expected);
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES_EXCEPT"), QByteArray("0x28de/0x1205"));
-        QVERIFY(configure(root, settings));
-        QCOMPARE(qgetenv("SDL_GAMECONTROLLER_IGNORE_DEVICES"), expected);
+        device.close();
+        QVERIFY(QFile::remove(device.fileName()));
+        QVERIFY(!isAvailable(root));
+        QVERIFY(!QFile::exists(device.fileName()));
     }
 
     void followsSysfsDeviceSymlinks()
@@ -153,12 +126,10 @@ private slots:
         addDevice(root);
         QVERIFY(QDir().rename(root.filePath("sys/hidraw0"), root.filePath("endpoint")));
         QVERIFY(QFile::link(root.filePath("endpoint"), root.filePath("sys/hidraw0")));
-        QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
-        settings.setValue(NativeDeckController::SettingKey, true);
-        QVERIFY(configure(root, settings));
+        QVERIFY(isAvailable(root));
     }
 
-    void readOnlyHardwarePreservesEnvironment()
+    void readOnlyHardwareIsUnavailable()
     {
         QTemporaryDir root;
         QVERIFY(root.isValid());
@@ -168,25 +139,7 @@ private slots:
         if (probe.open(QIODevice::ReadWrite | QIODevice::ExistingOnly)) {
             QSKIP("Run as an unprivileged user to exercise device permissions");
         }
-        QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
-        settings.setValue(NativeDeckController::SettingKey, true);
-        QVERIFY(!configure(root, settings));
-        QVERIFY(!qEnvironmentVariableIsSet("SDL_GAMECONTROLLER_IGNORE_DEVICES"));
-    }
-
-    void savedDisabledPreference()
-    {
-        QTemporaryDir root;
-        QVERIFY(root.isValid());
-        addDevice(root);
-        {
-            QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
-            settings.setValue(NativeDeckController::SettingKey, true);
-            settings.setValue(NativeDeckController::SettingKey, false);
-        }
-        QSettings reloaded(root.filePath("settings.ini"), QSettings::IniFormat);
-        QVERIFY(!configure(root, reloaded));
-        QVERIFY(!qEnvironmentVariableIsSet("SDL_JOYSTICK_HIDAPI_STEAMDECK"));
+        QVERIFY(!isAvailable(root));
     }
 
     void applicationPreferenceSaveAndReload()
@@ -215,25 +168,39 @@ private slots:
         QVERIFY(!disabled->nativeDeckControls);
     }
 
-    void updatesRegisteredSdlHintCallbacks()
+    void queryReadsSettingsWithoutGui()
     {
         QTemporaryDir root;
         QVERIFY(root.isValid());
-        addDevice(root);
-        QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
-        settings.setValue(NativeDeckController::SettingKey, true);
-        qputenv("SDL_GAMECONTROLLER_IGNORE_DEVICES", "0x28de/0x1205");
-        SDL_ResetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES);
-        QByteArray observed;
-        const auto callback = [](void* userdata, const char*, const char*, const char* value) {
-            *static_cast<QByteArray*>(userdata) = value;
-        };
-        SDL_AddHintCallback(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, callback, &observed);
-        const bool configured = configure(root, settings);
-        SDL_DelHintCallback(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES, callback, &observed);
-        QVERIFY(configured);
-        QCOMPARE(observed, QByteArray("0x28de/0x11ff"));
-        QCOMPARE(QByteArray(SDL_GetHint(SDL_HINT_GAMECONTROLLER_IGNORE_DEVICES)), QByteArray("0x28de/0x11ff"));
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert("XDG_CONFIG_HOME", root.path());
+        environment.insert("QT_QPA_PLATFORM", "vibemis-no-platform-plugin");
+        environment.remove("DISPLAY");
+        environment.remove("WAYLAND_DISPLAY");
+        environment.remove("VIBEMIS_NATIVE_DECK_GYRO");
+        QProcess process;
+        process.setProgram(QCoreApplication::applicationFilePath());
+        process.setArguments({"--native-deck-controls-enabled"});
+        process.setProcessEnvironment(environment);
+        process.start();
+        QVERIFY(process.waitForFinished());
+        QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+        QCOMPARE(process.exitCode(), 0);
+        QCOMPARE(process.readAllStandardOutput(), QByteArray("0\n"));
+
+        writeFile(root.filePath("Vibemis Project/Vibemis.conf"), "[General]\nnativedeckcontrols=true\n");
+        process.start();
+        QVERIFY(process.waitForFinished());
+        QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+        QCOMPARE(process.exitCode(), 0);
+        QCOMPARE(process.readAllStandardOutput(), QByteArray("1\n"));
+
+        environment.insert("VIBEMIS_NATIVE_DECK_GYRO", "0");
+        process.setProcessEnvironment(environment);
+        process.start();
+        QVERIFY(process.waitForFinished());
+        QCOMPARE(process.exitCode(), 0);
+        QCOMPARE(process.readAllStandardOutput(), QByteArray("0\n"));
     }
 
     void launchOverride_data()
@@ -253,14 +220,25 @@ private slots:
         QFETCH(bool, expected);
         QTemporaryDir root;
         QVERIFY(root.isValid());
-        addDevice(root);
         QSettings settings(root.filePath("settings.ini"), QSettings::IniFormat);
         settings.setValue(NativeDeckController::SettingKey, saved);
         qputenv("VIBEMIS_NATIVE_DECK_GYRO", overrideValue);
-        QCOMPARE(configure(root, settings), expected);
+        QCOMPARE(NativeDeckController::isEnabled(settings), expected);
         QCOMPARE(settings.value(NativeDeckController::SettingKey).toBool(), saved);
     }
 };
 
-QTEST_GUILESS_MAIN(NativeDeckControllerTest)
+int main(int argc, char* argv[])
+{
+    QCoreApplication::setOrganizationName("Vibemis Project");
+    QCoreApplication::setApplicationName("Vibemis");
+    const int queryResult = NativeDeckController::queryPreference(argc, argv, QSettings());
+    if (queryResult >= 0) {
+        return queryResult;
+    }
+    QCoreApplication application(argc, argv);
+    NativeDeckControllerTest test;
+    return QTest::qExec(&test, argc, argv);
+}
+
 #include "tst_nativedeckcontroller.moc"

@@ -9,7 +9,10 @@ In Vibemis, open **Settings > Input & gamepad > Gamepad Settings**:
 No Steam launch option is needed. The native-controls toggle appears in the
 AppImage when the Deck's native hidraw endpoint is readable and writable. It also
 remains available if a saved native-controls preference needs to be turned off.
-The preference defaults to off and is read before SDL opens game controllers.
+The preference defaults to off. AppRun reads it through a headless query and
+applies the original native-controller hook before starting the app, so SDL sees
+the selection from process startup. The query does not initialize SDL or open a
+Qt window.
 
 For scripted launches, the existing environment override remains supported:
 
@@ -44,13 +47,17 @@ cd build-native-deck-tests
 qmake6 ../tests/native-deck/native-deck.pro
 make -j2
 ./tst_nativedeckcontroller
+cd ..
+bash tests/native-deck/test-controller-selection.sh
+bash tests/native-deck/test-prelaunch-settings.sh build-native-deck-tests/tst_nativedeckcontroller
 ```
 
 The AppImage CI additionally checks the deployed SDL runtime version to catch a
 fallback to the older system library. Local AppImage builds use the same pinned
-SDL build script and application startup selection as CI. The native Deck Qt
-tests cover persisted opt-in, hardware detection, filter preservation, and launch
-overrides.
+SDL build script and pre-launch hook as CI. The native Deck tests cover persisted
+opt-in, hardware detection, filter preservation, launch overrides, and selection
+reaching a new process before `main()`. AppImage CI also verifies the packaged
+headless query against both disabled and enabled saved settings.
 
 On a Deck, launch through Steam Game Mode, connect, and verify Vibemis identifies
 `Steam Deck` with `gyro=yes accel=yes`. Actual sensor events should contain varying
