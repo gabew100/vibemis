@@ -32,6 +32,11 @@ mkdir "$BUILD_FOLDER"
 mkdir "$DEPLOY_FOLDER"
 mkdir "$INSTALLER_FOLDER"
 
+echo Building pinned SDL with native Steam Deck motion support
+bash "$SOURCE_ROOT/scripts/build-sdl2.sh" "$SOURCE_ROOT/deps/sdl2/install" || fail "SDL build failed!"
+export PKG_CONFIG_PATH="$SOURCE_ROOT/deps/sdl2/install/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+export LD_LIBRARY_PATH="$SOURCE_ROOT/deps/sdl2/install/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 echo Configuring the project
 pushd "$BUILD_FOLDER"
 # Building with Wayland support will cause linuxdeploy to include libwayland-client.so in the AppImage.
@@ -202,6 +207,8 @@ unset _vibemis_appimage_path _vibemis_desktop_dir _vibemis_icon_dir \
       _vibemis_desktop _vibemis_icon_src _vibemis_icon_dst
 DESKHOOK
 chmod +x $DEPLOY_FOLDER/apprun-hooks/02-desktop-integration.sh
+
+bash "$SOURCE_ROOT/scripts/install-native-deck-gyro-hook.sh" "$DEPLOY_FOLDER" || fail "Native Deck hook installation failed!"
 
 export QML_SOURCES_PATHS=$SOURCE_ROOT/app/gui
 export QMAKE=qmake6

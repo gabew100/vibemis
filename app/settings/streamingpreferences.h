@@ -251,6 +251,7 @@ public:
     Q_PROPERTY(bool compactPerformanceOverlay MEMBER compactPerformanceOverlay NOTIFY compactPerformanceOverlayChanged)
     Q_PROPERTY(bool preferTailscale MEMBER preferTailscale NOTIFY preferTailscaleChanged)
     Q_PROPERTY(bool forwardMotionControls MEMBER forwardMotionControls NOTIFY forwardMotionControlsChanged)
+    Q_PROPERTY(bool nativeDeckControls MEMBER nativeDeckControls NOTIFY nativeDeckControlsChanged)
     // Vibemis: optional wall-clock line at the top of the performance
     // overlay. Off by default so the overlay is unchanged for existing users.
     Q_PROPERTY(bool perfOverlayShowClock MEMBER perfOverlayShowClock NOTIFY perfOverlayShowClockChanged)
@@ -363,6 +364,7 @@ public:
     bool compactPerformanceOverlay;
     bool preferTailscale;
     bool forwardMotionControls;
+    bool nativeDeckControls;
     bool perfOverlayShowClock;
     bool suppressControllerRumble;
     PerfOverlayTextSize perfOverlayTextSize;
@@ -458,6 +460,7 @@ signals:
     void compactPerformanceOverlayChanged();
     void preferTailscaleChanged();
     void forwardMotionControlsChanged();
+    void nativeDeckControlsChanged();
     void perfOverlayShowClockChanged();
     void suppressControllerRumbleChanged();
     void perfOverlayTextSizeChanged();

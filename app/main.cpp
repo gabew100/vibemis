@@ -61,6 +61,7 @@
 #include "streaming/vrrratepolicy.h"
 #include "streaming/bitraterescuepolicy.h"
 #include "settings/streamingpreferences.h"
+#include "settings/nativedeckcontroller.h"
 #include "gui/sdlgamepadkeynavigation.h"
 #include "gui/uisoundmanager.h"
 #include "backend/clipboardmanager.h"
@@ -543,6 +544,13 @@ int main(int argc, char *argv[])
         // Initialize paths for standard installation
         Path::initialize(false);
     }
+
+#if defined(Q_OS_LINUX) && defined(APP_IMAGE)
+    const int nativeDeckQuery = NativeDeckController::queryPreference(argc, argv, QSettings());
+    if (nativeDeckQuery >= 0) {
+        return nativeDeckQuery;
+    }
+#endif
 
     // Override the default QML cache directory with the one we chose
     if (qEnvironmentVariableIsEmpty("QML_DISK_CACHE_PATH")) {

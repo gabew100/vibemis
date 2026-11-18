@@ -8,7 +8,8 @@ contains(CONFIG, tests) {
                updater \
                bitrate \
                overlay \
-               keyboard
+               keyboard \
+               native-deck
 } else {
-    message(VRR/updater/bitrate/keyboard tests are disabled; rerun qmake with CONFIG+=tests)
+    message(VRR/updater/bitrate/keyboard/native-deck tests are disabled; rerun qmake with CONFIG+=tests)
 }

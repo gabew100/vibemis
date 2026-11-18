@@ -241,6 +241,7 @@ HEADERS += \
     cli/quitstream.h \
     cli/startstream.h \
     settings/streamingpreferences.h \
+    settings/nativedeckcontroller.h \
     streaming/input/input.h \
     streaming/input/keyremotemap.h \
     streaming/session.h \
