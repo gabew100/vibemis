@@ -32,12 +32,10 @@ Native mode activates only when the native controller's hidraw endpoint is
 readable and writable.
 
 The AppImage bundles pinned SDL 2.32.10 instead of the Ubuntu 22.04 build host's
-SDL 2.0.20. A small carried SDL patch enables the Deck's raw gyro and accelerometer
-reports when the application activates sensors. Some controller states leave the
-IMU off, even though SDL reports both sensors as available. This writes only the
-volatile IMU-mode setting; it does not install a driver, change firmware or
-calibration, or start another input mapper. The patch can be dropped once the SDL
-version pin includes equivalent upstream behavior.
+SDL 2.0.20. The SDL patch requests raw gyro and accelerometer reports when Vibemis
+activates the sensors. If both motion fields stay zero while the controller still
+sends input, it requests the reports again. This can restore motion without
+reconnecting the stream. It changes only the Deck's temporary IMU mode.
 
 ## Checks
 
@@ -64,3 +62,4 @@ On a Deck, launch through Steam Game Mode, connect, and verify Vibemis identifie
 gyro values and acceleration consistent with gravity, rather than all zeros.
 Use a host that supports PlayStation motion emulation and a game with native
 motion input enabled. No gyro-to-stick or gyro-to-mouse mapping is required.
+

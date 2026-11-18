@@ -1,23 +1,94 @@
 diff --git a/src/joystick/hidapi/SDL_hidapi_steamdeck.c b/src/joystick/hidapi/SDL_hidapi_steamdeck.c
-index 20554ed..a3ee07c 100644
 --- a/src/joystick/hidapi/SDL_hidapi_steamdeck.c
 +++ b/src/joystick/hidapi/SDL_hidapi_steamdeck.c
-@@ -395,3 +395,17 @@ static int HIDAPI_DriverSteamDeck_SetSensorsEnabled(SDL_HIDAPI_Device *device, S
+@@ -24,6 +24,7 @@
+ 
+ #include "../SDL_sysjoystick.h"
+ #include "SDL_events.h"
++#include "SDL_timer.h"
+ #include "SDL_hidapijoystick_c.h"
+ 
+ #ifdef SDL_JOYSTICK_HIDAPI_STEAMDECK
+@@ -68,7 +69,45 @@
+     Uint32 sensor_timestamp_us;
+     Uint64 last_button_state;
+     Uint8 watchdog_counter;
++    SDL_bool sensors_enabled;
++    Uint64 next_imu_request_ms;
+ } SDL_DriverSteamDeck_Context;
++
++static SDL_bool RequestDeckIMUReports(SDL_hid_device *dev)
++{
++    Uint8 buffer[HID_FEATURE_REPORT_BYTES + 1] = { 0 };
++    FeatureReportMsg *msg = (FeatureReportMsg *)(buffer + 1);
++    msg->header.type = ID_SET_SETTINGS_VALUES;
++    msg->header.length = sizeof(ControllerSetting);
++    msg->payload.setSettingsValues.settings[0].settingNum = SETTING_IMU_MODE;
++    msg->payload.setSettingsValues.settings[0].settingValue =
++        SETTING_GYRO_MODE_SEND_RAW_ACCEL | SETTING_GYRO_MODE_SEND_RAW_GYRO;
++    return SDL_hid_send_feature_report(dev, buffer, sizeof(buffer)) == sizeof(buffer);
++}
++
++static void RecoverDeckIMUReports(SDL_HIDAPI_Device *device, const SteamDeckStatePacket_t *state)
++{
++    SDL_DriverSteamDeck_Context *ctx = (SDL_DriverSteamDeck_Context *)device->context;
++    Uint64 now;
++
++    if (!ctx->sensors_enabled) {
++        return;
++    }
++    if (state->sAccelX || state->sAccelY || state->sAccelZ ||
++        state->sGyroX || state->sGyroY || state->sGyroZ) {
++        ctx->next_imu_request_ms = 0;
++        return;
++    }
++
++    /* Firmware can stop filling the motion fields while input reports continue. */
++    now = SDL_GetTicks64();
++    if (!ctx->next_imu_request_ms) {
++        ctx->next_imu_request_ms = now + 250;
++    } else if (now >= ctx->next_imu_request_ms) {
++        ctx->next_imu_request_ms = now + 1000;
++        RequestDeckIMUReports(device->dev);
++    }
++}
+ 
+ static SDL_bool DisableDeckLizardMode(SDL_hid_device *dev)
+ {
+@@ -327,6 +366,7 @@
+                    pInReport->header.unReportVersion == k_ValveInReportMsgVersion &&
+                    pInReport->header.ucType == ID_CONTROLLER_DECK_STATE &&
+                    pInReport->header.ucLength == 64) {
++            RecoverDeckIMUReports(device, &pInReport->payload.deckState);
+             HIDAPI_DriverSteamDeck_HandleState(device, joystick, pInReport);
+         }
+     } while (r > 0);
+@@ -393,13 +433,21 @@
+ 
+ static int HIDAPI_DriverSteamDeck_SetSensorsEnabled(SDL_HIDAPI_Device *device, SDL_Joystick *joystick, SDL_bool enabled)
  {
 -    // On steam deck, sensors are enabled by default. Nothing to do here.
-+    /* Steam may leave the Deck IMU disabled. Request raw reports when the
-+       application enables sensors. Leave reports enabled on close so other
-+       applications can continue using them. */
-+    if (enabled) {
-+        Uint8 buffer[HID_FEATURE_REPORT_BYTES + 1] = { 0 };
-+        FeatureReportMsg *msg = (FeatureReportMsg *)(buffer + 1);
-+        msg->header.type = ID_SET_SETTINGS_VALUES;
-+        msg->header.length = sizeof(ControllerSetting);
-+        msg->payload.setSettingsValues.settings[0].settingNum = SETTING_IMU_MODE;
-+        msg->payload.setSettingsValues.settings[0].settingValue =
-+            SETTING_GYRO_MODE_SEND_RAW_ACCEL | SETTING_GYRO_MODE_SEND_RAW_GYRO;
-+        if (SDL_hid_send_feature_report(device->dev, buffer, sizeof(buffer)) != sizeof(buffer)) {
-+            return SDL_SetError("Could not enable Steam Deck raw IMU reports");
-+        }
++    SDL_DriverSteamDeck_Context *ctx = (SDL_DriverSteamDeck_Context *)device->context;
++
++    if (enabled && !RequestDeckIMUReports(device->dev)) {
++        return SDL_SetError("Could not enable Steam Deck raw IMU reports");
 +    }
++    ctx->sensors_enabled = enabled;
++    ctx->next_imu_request_ms = 0;
      return 0;
+ }
+ 
+ static void HIDAPI_DriverSteamDeck_CloseJoystick(SDL_HIDAPI_Device *device, SDL_Joystick *joystick)
+ {
+-    // Lizard mode id automatically re-enabled by watchdog. Nothing to do here.
++    SDL_DriverSteamDeck_Context *ctx = (SDL_DriverSteamDeck_Context *)device->context;
++    ctx->sensors_enabled = SDL_FALSE;
++    ctx->next_imu_request_ms = 0;
+ }
+ 
+ static void HIDAPI_DriverSteamDeck_FreeDevice(SDL_HIDAPI_Device *device)
+@@ -431,4 +479,3 @@
+ #endif /* SDL_JOYSTICK_HIDAPI_STEAMDECK */
+ 
+ #endif /* SDL_JOYSTICK_HIDAPI */
+-
