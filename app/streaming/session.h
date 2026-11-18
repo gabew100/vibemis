@@ -144,6 +144,7 @@ public:
     // True when the stream was cut unexpectedly (connection loss),
     // as opposed to a user-initiated quit — used by the auto-reconnect logic in QML.
     Q_INVOKABLE bool wasUnexpectedTermination() const { return m_UnexpectedTermination; }
+    Q_INVOKABLE bool didResumeTimeOut() const { return m_ResumeTimedOut; }
 
     // BL-2265: true when THIS session ended because the catastrophic
     // bitrate-collapse rescue tore it down to reconnect at a lower bitrate.
@@ -373,6 +374,7 @@ private:
     QWindow* m_QtWindow;
     bool m_ThreadedExec;
     bool m_UnexpectedTermination;
+    bool m_ResumeTimedOut = false;
     SdlInputHandler* m_InputHandler;
     int m_MouseEmulationRefCount;
     int m_FlushingWindowEventsRef;

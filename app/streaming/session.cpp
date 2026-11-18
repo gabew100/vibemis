@@ -2241,10 +2241,11 @@ bool Session::startConnectionAsync()
     }
 
     QString rtspSessionUrl;
+    const bool resuming = m_Computer->currentGameId != 0;
 
     try {
         NvHTTP http(m_Computer);
-        http.startApp(m_Computer->currentGameId != 0 ? "resume" : "launch",
+        http.startApp(resuming ? "resume" : "launch",
                       m_Computer->isNvidiaServerSoftware,
                       m_App.id, m_App.uuid, &m_StreamConfig,
                       enableGameOptimizations,
@@ -2257,6 +2258,7 @@ bool Session::startConnectionAsync()
         emit displayLaunchError(tr("Host returned error: %1").arg(e.toQString()));
         return false;
     } catch (const QtNetworkReplyException& e) {
+        m_ResumeTimedOut = resuming && e.getError() == QNetworkReply::TimeoutError;
         emit displayLaunchError(e.toQString());
         return false;
     }

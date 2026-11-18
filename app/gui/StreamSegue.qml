@@ -45,6 +45,9 @@ Item {
         // Arm auto-reconnect: the stream is genuinely up. Reset the attempt budget so
         // each successful (re)connection gets a fresh allowance.
         streamStarted = true
+        if (reconnectAttempts > 0) {
+            streamSegueErrorDialog.text = ""
+        }
         reconnectAttempts = 0
 
         // Hide the UI contents so the user doesn't
@@ -87,8 +90,10 @@ Item {
         // floor in BitrateRescuePolicy. Every NON-rescue path keeps the
         // CLI's exit-at-session-end semantics exactly as before.
         var rescueReconnect = session && session.wasBitrateRescue()
-        if (StreamingPreferences.autoReconnect && (!quitAfter || rescueReconnect) && streamStarted &&
-                session && session.wasUnexpectedTermination() &&
+        var droppedStream = streamStarted && session && session.wasUnexpectedTermination()
+        var timedOutRetry = reconnectAttempts > 0 && session && session.didResumeTimeOut()
+        if (StreamingPreferences.autoReconnect && (!quitAfter || rescueReconnect) &&
+                (droppedStream || timedOutRetry) &&
                 reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++
             streamStarted = false
